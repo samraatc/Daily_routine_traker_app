@@ -1,0 +1,31 @@
+---
+title: 12-week development flow (Gantt)
+---
+gantt
+    dateFormat  YYYY-MM-DD
+    title       Daily Routine & E-Book Tracker — Phase plan
+    excludes    weekends
+
+    section Phase 1 — Foundations
+    Monorepo + CI + Auth + Neu tokens  :p1, 2026-06-01, 14d
+
+    section Phase 2 — Routines
+    Task CRUD + Completions + Streak   :p2, after p1, 14d
+
+    section Phase 3 — Reminders
+    FCM + APNs + BullMQ + Notifee      :p3, after p2, 7d
+
+    section Phase 4 — Stats & Motion
+    Stats engine + scroll-triggered    :p4, after p3, 7d
+
+    section Phase 5 — E-Book Reader
+    PDF + EPUB + offline AES + curl    :p5, after p4, 14d
+
+    section Phase 6 — Uploads & Library
+    Upload pipeline + public library   :p6, after p5, 7d
+
+    section Phase 7 — Admin Panel
+    Next.js dashboard + RBAC + audit   :p7, after p6, 7d
+
+    section Phase 8 — Polish & Launch
+    A11y + perf + QA + store           :p8, after p7, 14d

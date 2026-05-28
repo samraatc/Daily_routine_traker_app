@@ -1,0 +1,34 @@
+---
+title: Monorepo structure (pnpm workspaces)
+---
+flowchart LR
+    classDef app fill:#EDF1F7,stroke:#6D28D9,color:#1A1D24
+    classDef pkg fill:#E8ECF2,stroke:#16A34A,color:#1A1D24
+    classDef infra fill:#FFF3E0,stroke:#D97706,color:#1A1D24
+    classDef docs fill:#F4ECD8,stroke:#5B4636,color:#1A1D24
+
+    Root[(monorepo<br/>pnpm-workspace)]
+
+    Root --> Apps[apps/]
+    Root --> Pkgs[packages/]
+    Root --> Infra[infra/]
+    Root --> Docs[docs/<br/>schema/<br/>diagrams/]:::docs
+
+    Apps --> Mobile[apps/mobile<br/>React Native + Expo]:::app
+    Apps --> Web[apps/admin-web<br/>Next.js 14]:::app
+    Apps --> API[apps/api<br/>Fastify + Prisma]:::app
+
+    Pkgs --> UI[packages/ui<br/>Neumorphic primitives]:::pkg
+    Pkgs --> Types[packages/types<br/>Zod-derived shared types]:::pkg
+    Pkgs --> Cfg[packages/config<br/>tsconfig / eslint / prettier]:::pkg
+
+    Infra --> Compose[infra/docker-compose.yml<br/>Postgres + Redis + Minio + ClamAV]:::infra
+    Infra --> Actions[infra/github-actions/<br/>CI workflows]:::infra
+
+    Mobile -.->|imports| UI
+    Mobile -.->|imports| Types
+    Mobile -.->|extends| Cfg
+    Web -.->|imports| Types
+    Web -.->|extends| Cfg
+    API -.->|imports| Types
+    API -.->|extends| Cfg

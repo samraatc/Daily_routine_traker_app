@@ -1,0 +1,13 @@
+{
+  "extends": "@app/config/tsconfig/node.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "noEmit": false,
+    "composite": false,
+    "incremental": true
+  },
+  "include": ["src/**/*", "test/**/*", "prisma/**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "references": [{ "path": "../../packages/types" }]
+}

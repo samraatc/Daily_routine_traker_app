@@ -1,0 +1,40 @@
+---
+title: Reader — online streaming vs offline encrypted
+---
+flowchart TB
+    classDef client fill:#EDF1F7,stroke:#6D28D9,color:#1A1D24
+    classDef api fill:#E8ECF2,stroke:#16A34A,color:#1A1D24
+    classDef store fill:#F4ECD8,stroke:#5B4636,color:#1A1D24
+    classDef secure fill:#FFE0E0,stroke:#DC2626,color:#1A1D24
+
+    User([User taps book]) --> Mode{Source mode?}
+
+    Mode -->|Online| Stream
+    Mode -->|Offline| Decrypt
+
+    subgraph onlinePath[Online (streaming) path]
+        Stream[Reader requests<br/>signed read URL]:::client
+        Stream --> API1[POST /books/:id/download<br/>or GET /books/:id]:::api
+        API1 --> S3stream[(S3 / R2<br/>ranged GET<br/>15-min TTL URL)]:::store
+        S3stream --> Render1[Render page in<br/>react-native-pdf / epubjs]:::client
+        Render1 --> Sync1[Sync position every 5s<br/>PUT /reading-progress/:id]:::client
+    end
+
+    subgraph offlinePath[Offline (downloaded) path]
+        Decrypt[Read books/&lt;bookId&gt;.enc<br/>from app document dir]:::client
+        Decrypt --> Key[Load per-user AES key<br/>from Keychain / EncryptedPrefs]:::secure
+        Key --> AES[AES-256-GCM decrypt<br/>to app cache tempfile]:::secure
+        AES --> Render2[Render page in<br/>react-native-pdf / epubjs]:::client
+        Render2 --> Sync2[Queue position locally<br/>flush on reconnect]:::client
+    end
+
+    subgraph downloadPath[One-time download (preparing offline)]
+        DL[User taps Download] --> StreamDL[Same signed URL flow]:::client
+        StreamDL --> Encrypt[AES-256-GCM encrypt<br/>with per-user key]:::secure
+        Encrypt --> Disk[(App document dir<br/>books/&lt;bookId&gt;.enc)]:::store
+        Disk --> Mark[Insert BookDownload row<br/>status=ready]:::api
+    end
+
+    Render1 --> Reader[Reader UI<br/>chrome • bookmarks • highlights]:::client
+    Render2 --> Reader
+    Mark -.-> Decrypt

@@ -1,0 +1,135 @@
+---
+title: Data model (entity relationships)
+---
+erDiagram
+    User ||--o{ Task : owns
+    User ||--o{ Completion : marks
+    User ||--|| Streak : has
+    User ||--o{ Book : owns
+    User ||--o{ ReadingProgress : has
+    User ||--o{ BookDownload : has
+    User ||--o{ Bookmark : has
+    User ||--o{ Report : files
+    User ||--o{ DeviceToken : registers
+    User ||--o{ NotificationLog : receives
+
+    Task ||--o{ Completion : tracked_by
+    Task }o--o| Book : linked_to
+
+    Book }o--|| BookCategory : in
+    Book ||--o{ ReadingProgress : has
+    Book ||--o{ BookDownload : has
+    Book ||--o{ Bookmark : has
+    Book ||--o{ Report : flagged_by
+
+    User ||--o{ AuditLog : actor
+
+    User {
+        uuid id PK
+        string email UK
+        string name
+        string timezone
+        enum role
+        datetime suspendedAt
+    }
+    Task {
+        uuid id PK
+        uuid userId FK
+        string title
+        enum category
+        string time
+        int[] repeatDays
+        boolean remindEnabled
+        uuid linkedBookId FK
+        datetime deletedAt
+    }
+    Completion {
+        uuid id PK
+        uuid taskId FK
+        uuid userId FK
+        date completedAt
+        boolean skipped
+    }
+    Streak {
+        uuid id PK
+        uuid userId FK UK
+        int currentStreak
+        int longestStreak
+        date lastCompletedDate
+    }
+    Book {
+        uuid id PK
+        uuid ownerId FK
+        string title
+        string author
+        string fileKey
+        string fileHash
+        enum format
+        enum visibility
+        uuid reviewedById FK
+        uuid categoryId FK
+        int downloadsCount
+        datetime deletedAt
+    }
+    BookCategory {
+        uuid id PK
+        string slug UK
+    }
+    ReadingProgress {
+        uuid id PK
+        uuid userId FK
+        uuid bookId FK
+        string currentLocator
+        decimal percent
+        int secondsRead
+    }
+    BookDownload {
+        uuid id PK
+        uuid userId FK
+        uuid bookId FK
+        enum status
+    }
+    Bookmark {
+        uuid id PK
+        uuid userId FK
+        uuid bookId FK
+        string locator
+        string note
+        string color
+    }
+    Report {
+        uuid id PK
+        uuid reporterId FK
+        uuid bookId FK
+        enum reason
+        enum status
+    }
+    DeviceToken {
+        uuid id PK
+        uuid userId FK
+        string token UK
+        string platform
+    }
+    NotificationLog {
+        uuid id PK
+        uuid userId FK
+        enum type
+        json payload
+        datetime sentAt
+        datetime openedAt
+    }
+    FeatureFlag {
+        uuid id PK
+        string key UK
+        boolean enabled
+        int rolloutPercent
+        json audience
+    }
+    AuditLog {
+        uuid id PK
+        uuid actorId FK
+        string action
+        string targetType
+        uuid targetId
+        json diff
+    }

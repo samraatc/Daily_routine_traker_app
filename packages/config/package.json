@@ -1,0 +1,21 @@
+{
+  "name": "@app/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/node.json": "./tsconfig/node.json",
+    "./tsconfig/react.json": "./tsconfig/react.json",
+    "./tsconfig/react-native.json": "./tsconfig/react-native.json",
+    "./eslint/base.js": "./eslint/base.js",
+    "./eslint/node.js": "./eslint/node.js",
+    "./eslint/react.js": "./eslint/react.js"
+  },
+  "files": ["tsconfig", "eslint"],
+  "scripts": {
+    "typecheck": "echo 'no-op (config-only package)'",
+    "lint": "echo 'no-op'",
+    "test": "echo 'no tests'"
+  }
+}

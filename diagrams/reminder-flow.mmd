@@ -1,0 +1,41 @@
+---
+title: Reminder flow — server + local fallback + Mark Done
+---
+sequenceDiagram
+    autonumber
+    actor User
+    participant App as Mobile App
+    participant API as Fastify API
+    participant Q as BullMQ (Redis)
+    participant W as Reminder Worker
+    participant FCM as FCM / APNs
+    participant N as Notifee (local)
+
+    User->>App: Toggle "Remind me" on task
+    App->>API: PATCH /tasks/:id { remindEnabled: true }
+    API->>Q: Enqueue next 14 occurrences<br/>(jobId = taskId + YYYYMMDDHHMM)
+    API->>App: 200 OK
+    App->>N: Schedule next 14 days locally<br/>(same notificationId)
+
+    Note over Q,W: Wait until delay elapses
+
+    Q->>W: Job fires
+    W->>W: Check task exists, user active,<br/>not in quiet hours
+    W->>FCM: Send push to user's device tokens<br/>(payload incl. Mark Done action)
+    FCM->>App: Push delivered
+
+    alt Foreground
+        App->>App: Show Neumorphic in-app banner
+    else Background + locked
+        FCM->>User: System notification with action button
+        N->>User: Local fallback (if no network)
+        Note over FCM,N: OS dedupes via same notificationId
+    end
+
+    User->>FCM: Tap "Mark Done" on lock screen
+    FCM->>API: POST /completions (via app background task)
+    API->>API: Idempotent insert<br/>(UNIQUE taskId,userId,date)
+    API->>API: Update Streak in same tx
+    API-->>FCM: 201 { streak }
+
+    W->>Q: Enqueue day-15 occurrence<br/>(rolling window)

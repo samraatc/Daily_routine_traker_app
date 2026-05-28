@@ -1,0 +1,32 @@
+---
+title: Upload → Moderation → Public Library flow
+---
+stateDiagram-v2
+    [*] --> uploading: User selects PDF/EPUB
+
+    uploading --> ingesting: PUT to S3 succeeds<br/>(< 50MB, content-type OK)
+
+    state ingesting {
+        [*] --> hashing
+        hashing --> clamav_scan: SHA-256 computed
+        clamav_scan --> extract_meta: clean
+        clamav_scan --> rejected_clamav: infected
+        extract_meta --> render_cover: title, author, page_count
+        render_cover --> [*]
+    }
+
+    ingesting --> private: Book row ready (default visibility)
+    ingesting --> rejected_clamav: virus detected
+    rejected_clamav --> [*]: file deleted from S3
+
+    private --> pending_review: Owner toggles "Make Public"
+    pending_review --> public: Moderator approves
+    pending_review --> rejected_mod: Moderator rejects (with reason)
+    pending_review --> private: Moderator requests edits
+
+    public --> private: Owner toggles back
+    public --> rejected_takedown: 3+ reports OR DMCA takedown
+    public --> [*]: Owner deletes (soft-delete)
+
+    rejected_mod --> private: Owner edits + re-submits
+    rejected_takedown --> [*]

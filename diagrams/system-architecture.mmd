@@ -1,0 +1,90 @@
+---
+title: Daily Routine & E-Book Tracker — System Architecture
+---
+flowchart TB
+    classDef client fill:#EDF1F7,stroke:#6D28D9,color:#1A1D24
+    classDef api fill:#E8ECF2,stroke:#16A34A,color:#1A1D24
+    classDef store fill:#F4ECD8,stroke:#5B4636,color:#1A1D24
+    classDef worker fill:#FFF3E0,stroke:#D97706,color:#1A1D24
+    classDef external fill:#F0F0F0,stroke:#6A6F7E,color:#1A1D24
+
+    subgraph clients[Clients]
+        M[Mobile App<br/>React Native + Expo<br/>iOS + Android]:::client
+        AW[Admin Web<br/>Next.js 14]:::client
+    end
+
+    subgraph backend[Backend]
+        LB([Load balancer]):::api
+        API1[API node<br/>Fastify + TS]:::api
+        API2[API node<br/>Fastify + TS]:::api
+        WS[(WebSocket /ws)]:::api
+    end
+
+    subgraph workers[Workers — separate processes]
+        WReminder[Reminder worker]:::worker
+        WIngest[Upload-ingest worker]:::worker
+        WClamAV[Virus-scan worker]:::worker
+        WBroadcast[Broadcast worker]:::worker
+        WReport[Report-triage worker]:::worker
+        WAudit[Audit shipper]:::worker
+    end
+
+    subgraph datastores[Data]
+        PG[(PostgreSQL 16<br/>Prisma)]:::store
+        R[(Redis 7<br/>BullMQ + cache)]:::store
+        S3[(S3 / R2<br/>private buckets)]:::store
+    end
+
+    subgraph externals[3rd-party]
+        Clerk[Clerk<br/>Auth]:::external
+        FCM[Firebase<br/>FCM]:::external
+        APNs[Apple<br/>APNs]:::external
+        Sentry[Sentry]:::external
+        ClamAV[(ClamAV<br/>sidecar)]:::external
+    end
+
+    M -->|HTTPS / WSS<br/>JWT Bearer| LB
+    AW -->|HTTPS / WSS<br/>JWT Bearer| LB
+    LB --> API1
+    LB --> API2
+    API1 <--> WS
+    API2 <--> WS
+
+    API1 -->|Prisma| PG
+    API2 -->|Prisma| PG
+    API1 -->|queue + cache| R
+    API2 -->|queue + cache| R
+    API1 -->|signed PUT/GET| S3
+    API2 -->|signed PUT/GET| S3
+
+    API1 -.->|verify JWT| Clerk
+    API2 -.->|verify JWT| Clerk
+
+    WReminder --> R
+    WIngest --> R
+    WClamAV --> R
+    WBroadcast --> R
+    WReport --> R
+
+    WReminder --> PG
+    WIngest --> PG
+    WBroadcast --> PG
+    WReport --> PG
+    WAudit --> PG
+
+    WIngest --> S3
+    WClamAV --> ClamAV
+
+    WReminder --> FCM
+    WReminder --> APNs
+    WBroadcast --> FCM
+    WBroadcast --> APNs
+
+    API1 -.->|errors / perf| Sentry
+    API2 -.->|errors / perf| Sentry
+    M -.->|errors / perf| Sentry
+    AW -.->|errors / perf| Sentry
+
+    WS -.->|admin events| AW
+    FCM -->|push| M
+    APNs -->|push| M

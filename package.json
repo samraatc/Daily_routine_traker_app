@@ -1,0 +1,36 @@
+{
+  "name": "daily-routine-tracker",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Daily Routine & E-Book Tracker — cross-platform monorepo (mobile + admin web + API)",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' --filter './apps/api' --filter './apps/admin-web' build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "test": "pnpm -r test",
+    "dev": "pnpm -r --parallel --filter './apps/*' dev",
+    "dev:api": "pnpm --filter @app/api dev",
+    "dev:web": "pnpm --filter @app/admin-web dev",
+    "dev:mobile": "pnpm --filter @app/mobile dev",
+    "db:migrate": "pnpm --filter @app/api db:migrate",
+    "db:seed": "pnpm --filter @app/api db:seed",
+    "db:reset": "pnpm --filter @app/api db:reset",
+    "docker:up": "docker compose -f infra/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infra/docker-compose.yml down",
+    "docker:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "fresh": "pnpm docker:down && rm -rf node_modules apps/*/node_modules packages/*/node_modules && pnpm install && pnpm docker:up"
+  },
+  "devDependencies": {
+    "prettier": "3.3.3",
+    "typescript": "5.5.4",
+    "@types/node": "20.14.10",
+    "tsx": "4.16.2"
+  }
+}

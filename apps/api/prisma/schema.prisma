@@ -1,0 +1,374 @@
+// =====================================================================
+// Daily Routine & E-Book Tracker — canonical Prisma schema (v2.0)
+// =====================================================================
+// This file is the single source of truth for the data model.
+// `apps/api/prisma/schema.prisma` should be a symlink or generated copy of this.
+//
+// Conventions:
+//  - UUID primary keys via `@default(dbgenerated("gen_random_uuid()"))`
+//  - All user-owned tables carry `userId` for tenant isolation
+//  - Soft-delete via `deletedAt` (never hard-delete user content except GDPR)
+//  - Timestamps default to `now()` on insert; updates handled in service layer
+//  - All audit-relevant tables are append-only (no UPDATE/DELETE at DB level)
+//
+// See docs/09-database-schema.md for the human-readable explanation.
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------
+
+enum Role {
+  user
+  contributor
+  moderator
+  admin
+  super_admin
+}
+
+enum TaskCategory {
+  morning
+  work
+  health
+  evening
+  study
+  reading
+  other
+}
+
+enum BookFormat {
+  pdf
+  epub
+}
+
+enum BookVisibility {
+  private
+  pending_review
+  public
+  rejected
+}
+
+enum BookDownloadStatus {
+  pending
+  ready
+  failed
+}
+
+enum ReportReason {
+  copyright
+  abuse
+  spam
+  inaccurate
+  other
+}
+
+enum ReportStatus {
+  open
+  resolved
+  dismissed
+}
+
+enum NotificationType {
+  reminder
+  broadcast
+  system
+}
+
+// ---------------------------------------------------------------------
+// Core: User
+// ---------------------------------------------------------------------
+
+model User {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email       String   @unique @db.VarChar(255)
+  name        String?  @db.VarChar(100)
+  avatarUrl   String?
+  timezone    String   @default("UTC") @db.VarChar(50)
+  locale      String   @default("en") @db.VarChar(10)
+  role        Role     @default(user)
+
+  // Quiet hours (local time, HH:mm strings)
+  quietHoursStart String? @db.VarChar(5) // "22:00"
+  quietHoursEnd   String? @db.VarChar(5) // "07:00"
+  mutedCategories TaskCategory[]
+
+  createdAt     DateTime @default(now())
+  lastActiveAt  DateTime @default(now())
+  suspendedAt   DateTime?
+
+  // Relations
+  tasks            Task[]
+  completions      Completion[]
+  streak           Streak?
+  ownedBooks       Book[]              @relation("BookOwner")
+  reviewedBooks    Book[]              @relation("BookReviewer")
+  readingProgress  ReadingProgress[]
+  downloads        BookDownload[]
+  bookmarks        Bookmark[]
+  reportsFiled     Report[]            @relation("ReportReporter")
+  reportsResolved  Report[]            @relation("ReportResolver")
+  notificationLogs NotificationLog[]
+  deviceTokens     DeviceToken[]
+  auditEntries     AuditLog[]          @relation("AuditActor")
+
+  @@index([email])
+  @@index([role])
+}
+
+// ---------------------------------------------------------------------
+// Routine: Task + Completion + Streak
+// ---------------------------------------------------------------------
+
+model Task {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String        @db.Uuid
+  title               String        @db.VarChar(200)
+  description         String?
+  category            TaskCategory  @default(other)
+  time                String?       @db.VarChar(5) // "HH:mm" local
+  repeatDays          Int[]         // 0=Sun ... 6=Sat
+  remindEnabled       Boolean       @default(false)
+  quietHoursOverride  Boolean       @default(false)
+  linkedBookId        String?       @db.Uuid
+  orderIndex          Int           @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  deletedAt           DateTime?
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedBook  Book?        @relation(fields: [linkedBookId], references: [id], onDelete: SetNull)
+  completions Completion[]
+
+  @@index([userId, deletedAt])
+  @@index([userId, category])
+}
+
+model Completion {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId       String   @db.Uuid
+  userId       String   @db.Uuid
+  completedAt  DateTime @db.Date
+  skipped      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Idempotency for "Mark Done" — one row per task per day
+  @@unique([taskId, userId, completedAt])
+  @@index([userId, completedAt])
+}
+
+model Streak {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String   @unique @db.Uuid
+  currentStreak       Int      @default(0)
+  longestStreak       Int      @default(0)
+  lastCompletedDate   DateTime? @db.Date
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------
+// Library: Book + BookCategory + ReadingProgress + BookDownload + Bookmark
+// ---------------------------------------------------------------------
+
+model Book {
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId             String           @db.Uuid
+  title               String           @db.VarChar(300)
+  author              String?          @db.VarChar(200)
+  description         String?
+  fileKey             String           // S3 object key
+  fileHash            String?          @db.VarChar(64) // SHA-256, for dedup
+  coverKey            String?
+  format              BookFormat
+  sizeBytes           BigInt
+  pageCount           Int?
+  visibility          BookVisibility   @default(private)
+  reviewedById        String?          @db.Uuid
+  reviewedAt          DateTime?
+  rejectionReason     String?
+  rightsAcceptedAt    DateTime?
+  categoryId          String?          @db.Uuid
+  tags                String[]
+  downloadsCount      Int              @default(0)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  deletedAt           DateTime?
+
+  owner       User             @relation("BookOwner",    fields: [ownerId],      references: [id], onDelete: Cascade)
+  reviewer    User?            @relation("BookReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  category    BookCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tasks       Task[]           // tasks linking to this book
+  progress    ReadingProgress[]
+  downloads   BookDownload[]
+  bookmarks   Bookmark[]
+  reports     Report[]
+
+  @@index([ownerId])
+  @@index([visibility])
+  @@index([categoryId, visibility])
+  @@index([downloadsCount(sort: Desc)])
+}
+
+model BookCategory {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String  @db.VarChar(80)
+  slug       String  @unique @db.VarChar(80)
+  icon       String? @db.VarChar(40)
+  orderIndex Int     @default(0)
+
+  books Book[]
+}
+
+model ReadingProgress {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @db.Uuid
+  bookId          String   @db.Uuid
+  currentLocator  String?  // CFI or page number
+  percent         Decimal  @default(0) @db.Decimal(5, 2)
+  secondsRead     Int      @default(0)
+  lastReadAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@index([userId, lastReadAt(sort: Desc)])
+}
+
+model BookDownload {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String              @db.Uuid
+  bookId          String              @db.Uuid
+  downloadedAt    DateTime            @default(now())
+  localSizeBytes  BigInt?
+  status          BookDownloadStatus  @default(pending)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+}
+
+model Bookmark {
+  // Carries both pure bookmarks and highlights/notes.
+  // - Bookmark only: note=null, color=null
+  // - Highlight: color set, optional note
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  bookId    String   @db.Uuid
+  locator   String   // CFI range or "page:42[x,y,w,h]"
+  note      String?
+  color     String?  @db.VarChar(20) // "yellow", "green", "blue", "pink"
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bookId, createdAt])
+}
+
+// ---------------------------------------------------------------------
+// Moderation: Report
+// ---------------------------------------------------------------------
+
+model Report {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporterId  String        @db.Uuid
+  bookId      String        @db.Uuid
+  reason      ReportReason
+  detail      String?
+  status      ReportStatus  @default(open)
+  resolvedById String?      @db.Uuid
+  resolvedAt   DateTime?
+  createdAt    DateTime     @default(now())
+
+  reporter User @relation("ReportReporter", fields: [reporterId],  references: [id], onDelete: Cascade)
+  resolver User? @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  book     Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([bookId])
+}
+
+// ---------------------------------------------------------------------
+// Notifications & device tokens
+// ---------------------------------------------------------------------
+
+model DeviceToken {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @db.Uuid
+  token       String   @unique
+  platform    String   @db.VarChar(10) // "ios" | "android"
+  locale      String?  @db.VarChar(10)
+  appVersion  String?  @db.VarChar(20)
+  staleAt     DateTime?
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model NotificationLog {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String           @db.Uuid
+  type         NotificationType
+  payload      Json
+  sentAt       DateTime         @default(now())
+  deliveredAt  DateTime?
+  openedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sentAt(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------
+// Feature flags
+// ---------------------------------------------------------------------
+
+model FeatureFlag {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key             String   @unique @db.VarChar(80)
+  enabled         Boolean  @default(false)
+  rolloutPercent  Int      @default(0)
+  audience        Json?    // { "minAppVersion": "2.1.0", "platforms": ["ios"] }
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------
+// Audit log — append-only (no UPDATE/DELETE granted in production)
+// ---------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String   @db.VarChar(80)  // e.g. "book.moderate.approve"
+  targetType String?  @db.VarChar(40)  // e.g. "Book", "User"
+  targetId   String?  @db.Uuid
+  diff       Json?
+  ip         String?  @db.VarChar(45)
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@index([action, createdAt(sort: Desc)])
+}
