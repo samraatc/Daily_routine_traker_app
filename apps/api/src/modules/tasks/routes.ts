@@ -9,7 +9,7 @@ import {
 } from '@app/types';
 
 import { createTasksService, serializeTask } from './service.js';
-import { dayOfWeek, todayInZone } from '../../lib/time.js';
+import { dayOfWeek } from '../../lib/time.js';
 
 export default async function tasksRoutes(app: FastifyInstance) {
   const svc = createTasksService(app.prisma);
@@ -20,11 +20,8 @@ export default async function tasksRoutes(app: FastifyInstance) {
     const q = listTasksQuerySchema.parse(req.query);
     let dow: number | undefined;
     if (q.date) {
+      // Explicit date filter (YYYY-MM-DD).
       dow = dayOfWeek(q.date);
-    }
-    const user = await app.prisma.user.findUnique({ where: { id: req.user.id } });
-    if (q.date === 'today' && user) {
-      dow = dayOfWeek(todayInZone(user.timezone));
     }
     const tasks = await svc.list(req.user.id, { includeDeleted: q.includeDeleted, dayOfWeek: dow });
     return tasks.map(serializeTask);

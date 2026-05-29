@@ -13,6 +13,14 @@ const envSchema = z.object({
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_REFRESH_TTL: z.string().default('7d'),
 
+  // ── File storage ──
+  // STORAGE_DRIVER picks the backend for book files + covers.
+  //   'mongodb' (default)  → MongoDB GridFS via MONGODB_URL
+  //   's3'                 → S3-compatible (R2, MinIO, AWS S3)
+  STORAGE_DRIVER: z.enum(['mongodb', 's3']).default('mongodb'),
+  MONGODB_URL: z.string().optional(),
+  MONGODB_BUCKET_FILES: z.string().default('books_files'),
+  MONGODB_BUCKET_COVERS: z.string().default('books_covers'),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default('auto'),
   S3_ACCESS_KEY: z.string().optional(),

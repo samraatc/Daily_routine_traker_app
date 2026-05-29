@@ -2,15 +2,40 @@
 
 > A cross-platform React Native app combining habit tracking, Neumorphic 3D UI, scroll-triggered motion, and a personal + public e-book library — governed by a powerful admin console.
 
-**Status:** Architecture & specification phase (pre-implementation).
+**Status:** Phases 1, 2, 4, 6, 7 implemented (auth, routines, completions + streak engine, stats, books, admin panel). Runnable end-to-end. See [`STATUS.md`](STATUS.md) for the full breakdown of built vs. roadmap.
 **Source PRD:** `Daily_Routine_Tracker_PRD_v2.pdf` (v2.0 — May 2026).
 **Target platforms:** Android & iOS (React Native + Expo) + Next.js admin web.
+
+### Run it
+
+| Goal | Read |
+|---|---|
+| Tools I need installed | [REQUIREMENTS.md](REQUIREMENTS.md) |
+| Step-by-step Windows CMD commands | [RUN_LOCAL_CMD.md](RUN_LOCAL_CMD.md) |
+| macOS / Linux shell version | [HOW_TO_RUN.md](HOW_TO_RUN.md) |
+| Deploy free to Render + Vercel + Neon + MongoDB Atlas | [DEPLOY.md](DEPLOY.md) |
+
+Short version (works on any shell once dependencies are installed):
+
+```bash
+pnpm install
+pnpm docker:up
+pnpm --filter @app/api db:migrate
+pnpm --filter @app/api db:seed
+pnpm dev
+```
+
+Then sign in to the admin web at `http://localhost:3000` as `admin@example.com` / `password123`, or the mobile app as `alice@example.com` / `password123`.
+
+### File storage
+
+Book files (PDF/EPUB) are stored in **MongoDB GridFS** (set `STORAGE_DRIVER=mongodb`, the default). S3-compatible (R2/AWS/MinIO) is also supported by setting `STORAGE_DRIVER=s3`. See [docs/02-tech-stack.md](docs/02-tech-stack.md).
 
 ---
 
 ## How to read this repository
 
-This is a **specification + architecture** package, not yet an implemented codebase. Everything here is designed to be handed to an engineering team (or a coding agent) and executed in order.
+The PRD has 23 sections. The docs in this repo mirror that flow so the team can build the product **phase by phase**, with each document answering exactly the questions that come up at that stage of development. The actual implementation (under `apps/` and `packages/`) follows the same structure.
 
 The PRD has 23 sections. The docs in this repo mirror that flow so the team can build the product **phase by phase**, with each document answering exactly the questions that come up at that stage of development.
 

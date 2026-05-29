@@ -9,11 +9,11 @@ docker compose -f infra/docker-compose.yml up -d
 | Service | Port(s) | Credentials |
 |---|---|---|
 | Postgres 16 | 5432 | user `app` / pw `app` / db `app` |
+| MongoDB 7 (GridFS for files) | 27017 | user `app` / pw `app` |
 | Redis 7 | 6379 | — |
-| MinIO (S3-compatible) | 9000 (API), 9001 (UI) | `minioadmin` / `minioadmin` |
 | MailHog | 1025 (SMTP), 8025 (UI) | — |
 
-The MinIO console is at http://localhost:9001 — create buckets `books-files`, `books-covers`, `exports` on first run (the API would do this on boot in production via an init job).
+MongoDB stores book files via GridFS. No bucket pre-creation needed; the API's first upload auto-creates the GridFS collections.
 
 To tear down (preserving data):
 
